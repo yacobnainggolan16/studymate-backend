@@ -94,11 +94,17 @@ app.post("/api/generate_questions", async (req, res) => {
 });
 
 // ✅ Ensure the server runs on the correct port
-app.listen(port, "0.0.0.0", () => {
+const server = app.listen(port, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${port}`);
 });
 
 // 🛑 Prevent Railway from killing the app
-process.on("SIGTERM", () => {
-  console.log("⚠️ SIGTERM received. Keeping server alive...");
+const gracefulShutdown = (signal) => {
+  console.log(`⚠️ Received ${signal}. Keeping server alive...`);
+};
+
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
+process.on("uncaughtException", (err) => {
+  console.error("🔥 Uncaught Exception:", err);
 });
