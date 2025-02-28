@@ -6,22 +6,38 @@ require("dotenv").config();
 const cors = require("cors");
 
 const app = express();
-const port = process.env.PORT || 5000; // ✅ Use dynamic port for Railway
+const port = process.env.PORT || 8080; // ✅ Railway recommends port 8080
 const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(cors()); // ✅ Enable CORS for frontend requests
 app.use(express.json());
 
+// ✅ Root route for health check
+app.get("/", (req, res) => {
+  res.status(200).json({ message: "🚀 Studymate Backend is running!" });
+});
+
 // ✅ Upload PDF and Extract Text
 app.post("/api/upload", upload.single("pdf"), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    if (!req.file) {
+      console.error("❌ No file uploaded.");
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    console.log(`📄 Received file: ${req.file.originalname}`);
 
     const pdfText = await pdfParse(req.file.buffer);
+    if (!pdfText.text) {
+      console.error("❌ PDF parsing failed.");
+      return res.status(500).json({ error: "Failed to extract text from PDF" });
+    }
+
+    console.log("✅ PDF parsed successfully.");
     res.json({ text: pdfText.text });
   } catch (error) {
-    console.error("Error parsing PDF:", error);
-    res.status(500).json({ error: "Failed to parse PDF" });
+    console.error("❌ Error in PDF upload:", error);
+    res.status(500).json({ error: "Failed to process the PDF" });
   }
 });
 
@@ -29,7 +45,12 @@ app.post("/api/upload", upload.single("pdf"), async (req, res) => {
 app.post("/api/generate_questions", async (req, res) => {
   try {
     const { text } = req.body;
-    if (!text) return res.status(400).json({ error: "No text provided" });
+    if (!text) {
+      console.error("❌ No text provided.");
+      return res.status(400).json({ error: "No text provided" });
+    }
+
+    console.log("🤖 Generating quiz questions from text...");
 
     const prompt = `Buatlah 3 pertanyaan pilihan ganda berdasarkan teks berikut:\n\n${text.substring(0, 1000)}\n\nFormat JSON: [{"question": "...", "options": ["A", "B", "C", "D"], "correctAnswer": "A"}]`;
 
@@ -51,8 +72,8 @@ app.post("/api/generate_questions", async (req, res) => {
       }
     );
 
-    // ✅ Ensure the OpenAI response is valid before parsing
     if (!response.data.choices || response.data.choices.length === 0) {
+      console.error("❌ OpenAI returned an empty response.");
       return res.status(500).json({ error: "OpenAI returned an empty response" });
     }
 
@@ -60,18 +81,24 @@ app.post("/api/generate_questions", async (req, res) => {
 
     try {
       const questions = JSON.parse(gptResponse);
+      console.log("✅ Quiz questions generated successfully.");
       res.json({ questions });
     } catch (parseError) {
-      console.error("Error parsing GPT response:", parseError);
+      console.error("❌ Error parsing GPT response:", parseError);
       res.status(500).json({ error: "Invalid JSON response from OpenAI" });
     }
   } catch (error) {
-    console.error("Error generating questions:", error.response?.data || error.message);
+    console.error("❌ Error generating questions:", error.response?.data || error.message);
     res.status(500).json({ error: "Failed to generate questions" });
   }
 });
 
 // ✅ Ensure the server runs on the correct port
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`🚀 Server running on port ${port}`);
+});
+
+// 🛑 Prevent Railway from killing the app
+process.on("SIGTERM", () => {
+  console.log("⚠️ SIGTERM received. Keeping server alive...");
 });
